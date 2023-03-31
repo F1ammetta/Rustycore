@@ -10,3 +10,4 @@ actix-web = { version = "4", features = ["openssl"] }
 openssl = { version = "0.10", features = ["v110"] }
 audiotags = "0.4.1"
 skytable = "0.7.0-alpha.4"
+dotenv = "0.15.0"

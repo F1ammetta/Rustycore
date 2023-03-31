@@ -1,6 +1,7 @@
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 mod database;
+use dotenv::dotenv;
 
 #[get("/v0/all")]
 async fn all() -> impl Responder {
@@ -48,18 +49,19 @@ async fn track(path: web::Path<String>) -> impl Responder {
 async fn main() -> std::io::Result<()> {
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
     // database::update_db().unwrap();
-    builder
-        .set_private_key_file(
-            r"C:\Certbot\live\kwak.sytes.net\privkey.pem",
-            SslFiletype::PEM,
-        )
-        .unwrap();
-    builder
-        .set_certificate_chain_file(r"C:\Certbot\live\kwak.sytes.net\fullchain.pem")
-        .unwrap();
+    dotenv().ok();
+    // set these env variables if you wanna use SSL
+    let cert = std::env::var("CERT_CHAIN").unwrap();
+    let key = std::env::var("KEY").unwrap();
+    // env variable for the ip address (will implement a config file later)
+    let addr = std::env::var("ADDR").unwrap();
+
+    builder.set_private_key_file(key, SslFiletype::PEM).unwrap();
+    builder.set_certificate_chain_file(cert).unwrap();
 
     HttpServer::new(|| App::new().service(all).service(track).service(cover))
-        .bind_openssl("192.168.1.72:443", builder)?
+        // change this to just bind if you're not using SSL (also mind the port)
+        .bind_openssl(format!("{}:443", addr), builder)?
         .run()
         .await
 }
