@@ -31,18 +31,29 @@ async fn cover(path: web::Path<String>) -> impl Responder {
 
 #[get("/tracks/{id}")]
 async fn track(path: web::Path<String>) -> impl Responder {
+    let dir = std::env::var("MUSIC_DIR").unwrap();
     let id = path.into_inner();
     println!("GET: Track ID: {}", id);
     let song: String = match database::get_song(id) {
         Ok(song) => song,
         Err(_) => return HttpResponse::NotFound().body("Song not found"),
     };
-    let file = std::fs::read(format!("D:\\Users\\Sergio\\Music\\Actual Music\\{}", song)).unwrap();
+    let file = std::fs::read(format!("{}\\{}", dir, song)).unwrap();
     HttpResponse::Ok()
         .content_type("audio/mpeg")
         .append_header(("Access-Control-Allow-Origin", "*"))
         .keep_alive()
         .body(file)
+}
+
+#[get("/app")]
+async fn app() -> impl Responder {
+    let path = std::env::var("APP_PATH").unwrap();
+    HttpResponse::Ok()
+        .content_type("application/vnd.android.package-archive")
+        .append_header(("Access-Control-Allow-Origin", "*"))
+        .keep_alive()
+        .body(std::fs::read(path).unwrap())
 }
 
 #[actix_web::main]
@@ -59,9 +70,15 @@ async fn main() -> std::io::Result<()> {
     builder.set_private_key_file(key, SslFiletype::PEM).unwrap();
     builder.set_certificate_chain_file(cert).unwrap();
 
-    HttpServer::new(|| App::new().service(all).service(track).service(cover))
-        // change this to just bind if you're not using SSL (also mind the port)
-        .bind_openssl(format!("{}:443", addr), builder)?
-        .run()
-        .await
+    HttpServer::new(|| {
+        App::new()
+            .service(all)
+            .service(track)
+            .service(cover)
+            .service(app)
+    })
+    // change this to just bind if you're not using SSL (also mind the port)
+    .bind_openssl(format!("{}:443", addr), builder)?
+    .run()
+    .await
 }

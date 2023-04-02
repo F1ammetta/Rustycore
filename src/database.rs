@@ -1,4 +1,6 @@
+#![allow(dead_code)]
 use audiotags::Tag;
+use dotenv::dotenv;
 use skytable::actions::Actions;
 use skytable::sync::Connection;
 use skytable::SkyResult;
@@ -11,9 +13,11 @@ pub fn get_song(id: String) -> SkyResult<String> {
 }
 
 pub fn get_cover(id: String) -> SkyResult<Vec<u8>> {
+    dotenv().ok();
+    let dir = std::env::var("MUSIC_DIR").unwrap();
     let mut con = Connection::new("127.0.0.1", 2003)?;
     let name: String = con.get(id)?;
-    let path = r"D:\Users\Sergio\Music\Actual Music\".to_string() + &name;
+    let path = dir + "\\" + &name;
     let tag = match Tag::default().read_from_path(path) {
         Ok(tag) => tag,
         Err(_) => return Ok(vec![]),
@@ -26,7 +30,8 @@ pub fn get_cover(id: String) -> SkyResult<Vec<u8>> {
 }
 
 pub fn save(names: &Vec<String>) -> SkyResult<()> {
-    let path = r"D:\Users\Sergio\Music\Actual Music\";
+    dotenv().ok();
+    let path = std::env::var("MUSIC_DIR").unwrap() + "\\";
     let mut json = String::from("[");
     for name in names.iter() {
         let tag = match Tag::default().read_from_path(path.to_string() + name) {
@@ -100,9 +105,6 @@ pub fn get_names() -> SkyResult<Vec<String>> {
         let path = entry.path();
         match path.file_name().unwrap().to_str() {
             Some(name) => {
-                if name == "Find Tomorrow(Ocarina)(Feat.mp3" {
-                    continue;
-                }
                 if name.ends_with(".mp3") || name.ends_with(".flac") || name.ends_with(".m4a") {
                     names.push(name.to_string());
                     name.to_string()
