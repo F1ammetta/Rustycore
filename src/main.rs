@@ -48,6 +48,7 @@ async fn track(path: web::Path<String>) -> impl Responder {
 
 #[get("/app")]
 async fn app() -> impl Responder {
+    println!("GET: App");
     let path = std::env::var("APP_PATH").unwrap();
     HttpResponse::Ok()
         .content_type("application/vnd.android.package-archive")

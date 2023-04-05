@@ -1,10 +1,24 @@
 #![allow(dead_code)]
 use audiotags::Tag;
 use dotenv::dotenv;
+use id3::Tag as Id3Tag;
+use metaflac::Tag as FlacTag;
+use mp4ameta::Tag as M4aTag;
+use serde::{Deserialize, Serialize};
 use skytable::actions::Actions;
 use skytable::sync::Connection;
 use skytable::SkyResult;
 use std::fs::read_dir;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Song {
+    title: String,
+    artist: String,
+    album: String,
+    duration: u32,
+    lyrics: String,
+    id: usize,
+}
 
 pub fn get_song(id: String) -> SkyResult<String> {
     let mut con = Connection::new("127.0.0.1", 2003)?;
@@ -24,7 +38,7 @@ pub fn get_cover(id: String) -> SkyResult<Vec<u8>> {
     };
     let cover = match tag.album_cover() {
         Some(cover) => cover,
-        None => return Ok(vec![]),
+        None => return Ok(std::fs::read("def-cover.png").unwrap()),
     };
     Ok(cover.data.to_vec())
 }
@@ -32,54 +46,67 @@ pub fn get_cover(id: String) -> SkyResult<Vec<u8>> {
 pub fn save(names: &Vec<String>) -> SkyResult<()> {
     dotenv().ok();
     let path = std::env::var("MUSIC_DIR").unwrap() + "\\";
-    let mut json = String::from("[");
+    let mut songs: Vec<Song> = Vec::new();
     for name in names.iter() {
         let tag = match Tag::default().read_from_path(path.to_string() + name) {
             Ok(tag) => tag,
             Err(_) => continue,
         };
+        let mut lyrics: String = "".to_string();
+        let def_lyrics = vec![String::from("")];
+        if name.ends_with(".flac") {
+            let flac = FlacTag::read_from_path(path.to_string() + name).unwrap();
+            let lyricss = match flac.vorbis_comments().unwrap().get("LYRICS") {
+                Some(lyricss) => lyricss,
+                None => &def_lyrics,
+            };
+            lyrics = lyricss[0].to_string();
+        }
+
+        if name.ends_with(".m4a") {
+            let m4a = M4aTag::read_from_path(path.to_string() + name).unwrap();
+            lyrics = match m4a.lyrics() {
+                Some(lyrics) => lyrics.to_string(),
+                None => "".to_string(),
+            };
+        }
+
+        if name.ends_with(".mp3") {
+            let mp3 = Id3Tag::read_from_path(path.to_string() + name).unwrap();
+            let ls = mp3.lyrics();
+            ls.for_each(|l| lyrics.push_str(&l.text));
+        }
+        lyrics = lyrics
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\'", "'");
+
+        if lyrics.contains("\n") {
+            println!("asdf");
+        }
+
         let title = tag.title().unwrap_or(name);
-        // let title = &title
-        //     .chars()
-        //     .map(|x| if x == '\0' { ' ' } else { x })
-        //     .collect::<String>();
         let artist = tag.artist().unwrap_or("Unknown Artist");
-        // let artist = &artist
-        //     .chars()
-        //     .map(|x| if x == '\0' { ' ' } else { x })
-        //     .collect::<String>();
         let album = tag.album_title().unwrap_or("Unknown Album");
-        // let album = &album
-        //     .chars()
-        //     .map(|x| if x == '\0' { ' ' } else { x })
-        //     .collect::<String>();
         let dur = tag.duration().unwrap_or(0.) as u32;
         let id = names.iter().position(|x| x == name).unwrap() + 1;
-        json += &format!(
-            "{{\"title\":\"{}\",\"artist\":\"{}\",\"album\":\"{}\",\"duration\":{},\"id\":{}}},",
-            if title.contains(r#"""#) || title.contains(r#"\'"#) {
-                title.replace(r#"""#, r#"\""#).replace(r#"\'"#, r#"'"#)
-            } else {
-                title.to_string()
-            },
-            if artist.contains(r#"""#) || artist.contains(r#"\'"#) || artist.contains(r#"\0"#) {
-                artist.replace(r#"""#, r#"\""#).replace(r#"\'"#, r#"'"#)
-            } else {
-                artist.to_string()
-            },
-            if album.contains(r#"""#) || album.contains(r#"\'"#) {
-                album.replace(r#"""#, r#"\""#).replace(r#"\'"#, r#"'"#)
-            } else {
-                album.to_string()
-            },
-            dur,
-            id
-        );
+        let song = Song {
+            title: title.to_string(),
+            artist: artist.to_string(),
+            album: album.to_string(),
+            duration: dur,
+            lyrics,
+            id,
+        };
+        songs.push(song);
     }
-    json.pop().unwrap();
-    json += "]";
+    let json: String = match serde_json::to_string(&songs) {
+        Ok(json) => json,
+        Err(_) => "".to_string(),
+    };
     std::fs::write("music.json", json)?;
     println!("JSON Dumped!");
+
     Ok(())
 }
 
