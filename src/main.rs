@@ -59,8 +59,13 @@ async fn app() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        if args[1] == "--update" || args[1] == "--u" {
+            database::update_db().unwrap();
+        }
+    }
     let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    // database::update_db().unwrap();
     dotenv().ok();
     // set these env variables if you wanna use SSL
     let cert = std::env::var("CERT_CHAIN").unwrap();
